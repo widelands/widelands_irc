@@ -57,7 +57,7 @@ class MyHandler(BaseHTTPRequestHandler):
 def worker():
     irc.loop()
 
-irc = IrcConnection('config.ini')
+irc = IrcConnection('src/config.ini')
 
 def _generate_signature(data, hash_algo):
     key = irc.widelands['webhook']['secret']
