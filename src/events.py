@@ -9,6 +9,7 @@ def fmt_repo(data):
 # Use git.io to get a shortened link for commit names, etc. which are too long
 def short_gh_link(link):
     conn = requests.post('https://git.io', data={'url':link})
+    print('Header: {}'.format(conn.headers))
     return conn.headers['Location']
 
 MAX_COMMIT_LOG_LEN = 5
@@ -22,9 +23,11 @@ def fmt_commit(cmt):
     return '{} {}: {}'.format(hsh, author, message)
 
 def fmt_message(message, message_len=350):
-    message = message.replace('\n', ' ')
-    message = message.replace('\r', '')
-    message = message[:message_len] \
+    print('MSG: {}\nType: {}'.format(message, type(message)))
+    if message:
+        message = message.replace('\n', ' ')
+        message = message.replace('\r', '')
+        message = message[:message_len] \
             + ('..' if len(message) > message_len else '')
 
     return message
@@ -56,8 +59,10 @@ def handle_force_push(irc, data):
     branch = data['ref'].split('/')[-1]
     branch = colorize(branch, 'bold-blue', 'irc')
 
-    irc.schedule_message("{} {} force-pushed {} from {} to {} ({}):"
-            .format(fmt_repo(data), author, branch, before, after, short_gh_link(data['compare'])))
+    #irc.schedule_message("{} {} force-pushed {} from {} to {} ({}):"
+    #        .format(fmt_repo(data), author, branch, before, after, short_gh_link(data['compare'])))
+    irc.schedule_message("{} {} force-pushed {} from {} to {}:"
+            .format(fmt_repo(data), author, branch, before, after))
 
     commits = fmt_last_commits(data)
     for commit in commits:
@@ -76,8 +81,10 @@ def handle_forward_push(irc, data):
     branch = data['ref'].split('/')[-1]
     branch = colorize(branch, 'bold-blue', 'irc')
 
-    irc.schedule_message("{} {} pushed {} to {} ({}):"
-            .format(fmt_repo(data), author, num_commits, branch, short_gh_link(data['compare'])))
+    #irc.schedule_message("{} {} pushed {} to {} ({}):"
+    #        .format(fmt_repo(data), author, num_commits, branch, short_gh_link(data['compare'])))
+    irc.schedule_message("{} {} pushed {} to {}:"
+            .format(fmt_repo(data), author, num_commits, branch))
 
     commits = fmt_last_commits(data)
     for commit in commits:
@@ -122,45 +129,62 @@ def handle_pull_request(irc, data):
     action = fmt_pr_action(data['action'], data['pull_request']['merged'])
     pr_num = colorize('#' + str(data['number']), 'bold-blue', 'irc')
     title = data['pull_request']['title']
-    link = short_gh_link(data['pull_request']['html_url'])
+    #link = short_gh_link(data['pull_request']['html_url'])
     message = fmt_message(data['pull_request']['body'])
 
-    irc.schedule_message('{} {} {} pull request {}: {} ({})'
-            .format(repo, author, action, pr_num, title, link))
-    irc.schedule_message('{}'.format(message))
+    #irc.schedule_message('{} {} {} pull request {}: {} ({})'
+    #        .format(repo, author, action, pr_num, title, link))
+    irc.schedule_message('{} {} {} pull request {}: {}'
+            .format(repo, author, action, pr_num, title))
+    if message:
+        irc.schedule_message('{}'.format(message))
 
 
 def handle_issue(irc, data):
+    print('Issue')
     repo = fmt_repo(data)
     user = colorize(data['sender']['login'], 'bold', 'irc')
 
     action = data['action']
-    if not action in ['opened', 'closed']:
+    print('Action: {}'.format(action))
+    if action in ['opened', 'closed']:
+        action_color = 'red' if action == 'opened' else 'green'
+    elif action == 'milestoned':
+        action_color = 'red'
+    else:
+        print('Action: {}'.format(action))
         return
-    action_color = 'red' if action == 'opened' else 'green'
     action = colorize(action, action_color, 'irc')
 
-    issue_num = colorize('#' + str(data['issue']['number']), 'bold-blue', 'irc')
+    issue_num = colorize('#{}'.format(data['issue']['number']), 'bold-blue', 'irc')
     title = data['issue']['title']
-    link = short_gh_link(data['issue']['html_url'])
+    #link = short_gh_link(data['issue']['html_url'])
     message = fmt_message(data['issue']['body'])
 
-    irc.schedule_message('{} {} {} issue {}: {} ({})'
-            .format(repo, user, action, issue_num, title, link))
+    #irc.schedule_message('{} {} {} issue {}: {} ({})'
+    #        .format(repo, user, action, issue_num, title, link))
+    irc.schedule_message('{} {} {} issue {}: {}'
+            .format(repo, user, action, issue_num, title))
+    #if action in ['opened', 'closed']:
     irc.schedule_message('{}'.format(message))
+
+    print('Issue')
 
 def handle_issue_comment(irc, data):
     repo = fmt_repo(data)
     title = fmt_message(data['issue']['title'], MAX_COMMIT_LEN)
     author = colorize(data['sender']['login'], 'bold', 'irc')
     issue_num = colorize('#' + str(data['issue']['number']), 'bold-blue', 'irc')
-    issue_link = short_gh_link(data['issue']['html_url'])
-    comment_link = short_gh_link(data['comment']['html_url'])
+    #issue_link = short_gh_link(data['issue']['html_url'])
+    #comment_link = short_gh_link(data['comment']['html_url'])
     message = fmt_message(data['comment']['body'])
 
-    irc.schedule_message('{} {} commented on issue {}: {} ({})'
-            .format(repo, author, issue_num, title, issue_link))
-    irc.schedule_message('{} ({})'.format(message, comment_link))
+    #irc.schedule_message('{} {} commented on issue {}: {} ({})'
+    #        .format(repo, author, issue_num, title, issue_link))
+    irc.schedule_message('{} {} commented on issue {}: {}'
+            .format(repo, author, issue_num, title))
+    #irc.schedule_message('{} ({})'.format(message, comment_link))
+    irc.schedule_message('{}'.format(message))
 
     print('Issue comment')
 
@@ -186,8 +210,8 @@ def handle_status_event(irc, data):
     commit_id = colorize(after_id, 'bold', 'irc')
     desc = colorize(data['description'], color, 'irc')
     target_url = data['target_url'].split('?', 1)[0]
-    change_url = short_gh_link('https://github.com/{}/compare/{}...{}'
-            .format(repo_name, befor_id, after_id))
+    #change_url = short_gh_link('https://github.com/{}/compare/{}...{}'
+    #        .format(repo_name, befor_id, after_id))
     change = colorize('Change view:', 'teal', 'irc')
     build = colorize('Build details:', 'teal', 'irc')
     message = fmt_message(data['commit']['commit']['message'], MAX_COMMIT_LEN)
@@ -196,8 +220,10 @@ def handle_status_event(irc, data):
 
     irc.schedule_message('{} {} on {}: {}'
             .format(repo, commit_id, branch, desc))
-    irc.schedule_message('{} {} {}'
-            .format(change, commit_msg, change_url))
+    #irc.schedule_message('{} {} {}'
+    #        .format(change, commit_msg, change_url))
+    irc.schedule_message('{} {}'
+            .format(change, commit_msg))
     irc.schedule_message('{} {}'
             .format(build, target_url))
 
@@ -217,7 +243,12 @@ def handle_watch_event(irc, data):
 def handle_ping_event(irc, data):
     print("Ping event")
 
+def handle_check_run(irc, data):
+    print('Action: {}\nName: {}\nStatus: {}\nConclusion: {}'.format(
+        data['action'], data['check_run']['name'], data['check_run']['status'], data['check_run']['conclusion']))
+
 def handle_event(irc, event, data):
+    msg = ''
     if event == 'ping':
         handle_ping_event(irc, data)
     elif event == 'push':
@@ -232,6 +263,9 @@ def handle_event(irc, event, data):
         handle_status_event(irc, data)
     elif event == 'watch':
         handle_watch_event(irc, data)
+    elif event == 'check_run':
+        handle_check_run(irc, data)
     else:
-        print("Unknown event type: " + event)
-    print('handle_event: {}'.format(event))
+        msg = 'Unknown event type: {}'.format(event)
+    msg = 'handle_event: {}'.format(event) if not msg else msg
+    print(msg)

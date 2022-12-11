@@ -125,17 +125,17 @@ class trigger:
             self.send_message('STATUS', 'NICKSERV')
 
     def trigger_privmsg(self):
+        content = self.content.split()
+        #if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
+        #    self.send_message("Hello {}. The 2022 Tournament has been announced. Subscriptions appreciated until septemebr 4th. See our homepage for details.".format(content[0]), self.target)
         if self.hostname == self.widelands['admin']['hosts']:
             if re.search('^nickserv', self.content, re.IGNORECASE):
                 self.trigger_nickserv()
             if re.search('^admin', self.content, re.IGNORECASE):
-                self.trigger_admin()
-
-        if self.content.find('{}hello'.format(self.trigger)) == 0 \
-                or self.content.find('{}hallo'.format(self.trigger)) == 0 \
-                or re.search('^hello', self.content, re.IGNORECASE) \
-                or re.search('^hallo', self.content, re.IGNORECASE):
-            self.send_message('Hallo {}'.format(self.name), self.target)
+                if len(content) >= 2:
+                    self.trigger_admin()
+                else:
+                    self.send_message("Hier sollte was stehen", self.target)
 
         if self.content.find('{}ping'.format(self.trigger)) == 0 \
                 or re.search('^ping {}'.format(self.widelands['nickserv']['username']), self.content, re.IGNORECASE):

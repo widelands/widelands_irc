@@ -29,9 +29,14 @@ class MyHandler(BaseHTTPRequestHandler):
         content_len = int(self.headers['content-length'])
         event_type = self.headers['x-github-event']
 
+        if content_type != "application/json":
+            self.send_error(400, "Bad Request", "Expected a JSON request")
+            return
+
         data = self.rfile.read(content_len)
-        if sys.version_info < (3, 6):
-            data = data.decode()
+        #if sys.version_info < (3, 6):
+        #    data = data.decode()
+        data = data.decode()
 
         if irc.widelands['webhook']['secret'] and self.headers['x-hub-signature']:
             elements = self.headers['x-hub-signature'].split('=')
@@ -52,11 +57,11 @@ class MyHandler(BaseHTTPRequestHandler):
 def worker():
     irc.loop()
 
-irc = IrcConnection('src/config.ini')
+irc = IrcConnection('config.ini')
 
 def _generate_signature(data, hash_algo):
     key = irc.widelands['webhook']['secret']
-    key_bytes= bytes(key , 'utf-8')
+    key_bytes= bytes(key, 'utf-8')
     data_bytes = bytes(data, 'utf-8')
     return hmac.new(key_bytes, data_bytes, digestmod=hash_algo).hexdigest()
 

@@ -47,5 +47,5 @@ def colorize(msg, color, target='irc'):
         return color_modifier(color) + msg + color_modifier('reset')
     elif target == 'shell':
         if not sys.stdout.isatty():
-            return line
+            return msg
         return '\033[' + ansi_colors[color] + msg + '\033[0m'
