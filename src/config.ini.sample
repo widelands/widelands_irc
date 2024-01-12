@@ -37,3 +37,5 @@ port = 8080
 start = True
 secret = 
 
+[logging]
+filename = /path/to/logfile.log
