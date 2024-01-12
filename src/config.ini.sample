@@ -17,6 +17,7 @@ admin = #chanel-admin
 event = #chanel-feeds
 liste = #chanel-admin, #chanel-feeds
 relay = 
+welcome = /path/to/welcome.message
 
 [admin]
 hosts = nick!user@host.domain.tld

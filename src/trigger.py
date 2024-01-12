@@ -134,12 +134,7 @@ class trigger:
     def trigger_privmsg(self):
         content = self.content.split()
         if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
-            # 2022
-            #self.send_message("Hello {}. The 2022 Tournament has been announced. Subscriptions appreciated until septemebr 4th. See our homepage for details.".format(content[0]), self.target)
-            # 2023
-            #self.send_message("Hello {}. The yearly Widelands Tournament will take place beginning of August and featuring the new Naval Warfare feature. Subscriptions are open. See our homepage for details.".format(content[0]), self.target)
-            # ToDo: ab ins config file
-            with open(".group_chat_text") as gct:
+            with open(self.widelands['channel']['welcome']) as gct:
                 content_gct = gct.readlines()
                 self.send_message(content_gct[0].format(content[0]), self.target)
             #pass
