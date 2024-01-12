@@ -30,21 +30,30 @@ class MyHandler(BaseHTTPRequestHandler):
         event_type = self.headers['x-github-event']
 
         if content_type != "application/json":
+            irc.log_to_file('CRITICAL', 'ERROR: not JSON\nData: {}'.format(self.headers))
             self.send_error(400, "Bad Request", "Expected a JSON request")
             return
 
+        irc.log_to_file('DEBUG', 'INFO: valid JSON\nData: {}'.format(self.headers))
+
         data = self.rfile.read(content_len)
-        #if sys.version_info < (3, 6):
-        #    data = data.decode()
         data = data.decode()
 
-        if irc.widelands['webhook']['secret'] and self.headers['x-hub-signature']:
-            elements = self.headers['x-hub-signature'].split('=')
-            github_hash_algo = elements[0]
-            github_signature = elements[1]
-            verify_signature = _generate_signature(data, github_hash_algo)
-            if github_signature not in verify_signature:
+        if irc.widelands['webhook']['secret']:
+            if not ('X-Hub-Signature' and 'X-Hub-Signature-256' in self.headers.keys()):
+                irc.log_to_file('CRITICAL', 'ERROR: Signature Header Missing\nSHA1: {}\nSHA256: {}'.format(
+                    self.headers['X-Hub-Signature'] if 'X-Hub-Signature' in self.headers.keys() else 'not set'
+                    , self.headers['X-Hub-Signature-256'] if 'H-Hub-Signature-256' in self.headers.keys() else 'not set'
+                    ))
+                self.send_error(403, "Forbidden", "Signature header is missing!")
                 return
+            else:
+                if 'X-Hub-Signature' in self.headers.keys():
+                    irc.log_to_file('DEBUG', 'INFO: Check Signature: {}'.format(self.headers['X-Hub-Signature']))
+                    _check_signature(self.headers['X-Hub-Signature'], data)
+                if 'X-Hub-Signature-256' in self.headers.keys():
+                    irc.log_to_file('DEBUG', 'INFO: Check Signature: {}'.format(self.headers['X-Hub-Signature-256']))
+                    _check_signature(self.headers['X-Hub-Signature-256'], data)
 
         self.send_response(200)
         self.send_header('content-type', 'text/html')
@@ -57,7 +66,16 @@ class MyHandler(BaseHTTPRequestHandler):
 def worker():
     irc.loop()
 
-irc = IrcConnection('src/config.ini')
+irc = IrcConnection('config.ini')
+
+def _check_signature(signature_header, data):
+    hash_algo, header_signature = signature_header.split('=')
+    generated_signature = _generate_signature(data, hash_algo)
+    if not hmac.compare_digest(header_signature, generated_signature):
+        irc.log_to_file('CRITICAL', 'ERROR: Check Signature: FAILED\nTO CHECKS: {}\nTO VERIFY: {}'.format(header_signature, generated_signature))
+        self.send_error(403, "Forbidden", "Request signatures didn't match!")
+        return
+    irc.log_to_file('DEBUG', 'INFO: Check Signature: OK\nTO CHECKS: {}\nTO VERIFY: {}'.format(header_signature, generated_signature))
 
 def _generate_signature(data, hash_algo):
     key = irc.widelands['webhook']['secret']
@@ -74,7 +92,7 @@ if irc.widelands['webhook']['start']:
         server = HTTPServer((irc.widelands['webhook']['host'], irc.widelands['webhook']['port']), MyHandler)
         server.serve_forever()
     except KeyboardInterrupt:
-        print("Exiting")
+        irc.log_to_file('INFO', "Exiting")
         server.socket.close()
         irc.stop_loop()
 

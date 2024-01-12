@@ -8,6 +8,7 @@ import locale
 import ssl
 import base64
 import queue
+import logging
 
 from colors import colorize
 from trigger import trigger
@@ -19,7 +20,7 @@ class IrcConnection(trigger, config):
         self.configfile = configfile
         self.read()
         self.command_list = ['001', '002', '003', '004', '005', '250', '251', '252', '253', '254', '255', '265', '266', '372', '375', '376', '404']
-        self.version = "v0.4.2"
+        self.version = "v0.7.1"
         self.connection = None
         self.buffer = ""
         self.last_ping = 0
@@ -33,6 +34,44 @@ class IrcConnection(trigger, config):
         self.quit_loop = False
         self.time_format = "%d.%m.%Y %H:%M:%S"
         locale.setlocale(locale.LC_TIME, self.widelands['locale']['lang'])
+        # create logger
+        self.logger = logging.getLogger('widelands_bot')
+        self.logger.setLevel(logging.INFO)
+        # create file handler and set level to debug
+        fh = logging.FileHandler(
+                filename = self.widelands['logging']['filename']
+                , encoding = 'utf-8'
+                )
+        # create formatter
+        formatter = logging.Formatter(
+                fmt = '%(asctime)s - %(levelname)s:%(message)s'
+                , datefmt='%d.%m.%Y %H:%M:%S'
+                )
+        # add formatter to fh
+        fh.setFormatter(formatter)
+        # add fh to logger
+        self.logger.addHandler(fh)
+        self.logLevel = {
+            'DEBUG': 10
+            , 'INFO': 20
+            , 'WARN': 30
+            , 'ERROR': 40
+            , 'CRITICAL': 50
+            }
+
+    def log_to_file(self, level, message):
+        if level == 'DEBUG':
+            self.logger.debug(message)
+        elif level == 'INFO':
+            self.logger.info(message)
+        elif level == 'WARN':
+            self.logger.warning(message)
+        elif level == 'ERROR':
+            self.logger.error(message)
+        elif level == 'CRITICAL':
+            self.logger.critical(message)
+        else:
+            self.logger.critical('Da ging was schief.\n{} gehört hier nicht hin'.format(level))
 
     def connect_server(self):
         print(colorize("Connecting to {}:{}".format(self.widelands['server']['address'],
@@ -89,7 +128,7 @@ class IrcConnection(trigger, config):
 
     def try_ping(self):
         if self.widelands['admin']['debug']:
-            print('try_ping: {}'.format(time.time()))
+            self.log_to_file('DEBUG', 'try_ping: {}'.format(time.time()))
         if self.widelands['ping']['use']:
             self.post_string('PING {}'.format(self.widelands['server']['address']))
             self.update('ping', 'pending', True)
@@ -103,7 +142,7 @@ class IrcConnection(trigger, config):
 
     def format_content(self, line):
         if self.widelands['admin']['debug']:
-            print("format_content_1: {}".format(line))
+            self.log_to_file('DEBUG', "format_content_1: {}".format(line))
         if line.startswith(':'):
             source, line = line[1:].split(' ', 1)
         else:
@@ -131,7 +170,7 @@ class IrcConnection(trigger, config):
 
         self.content = text
         if self.widelands['admin']['debug']:
-            print("""format_content_2: hostname: {}
+            self.log_to_file('DEBUG', """format_content_2: hostname: {}
                   name:     {}
                   user:     {}
                   host:     {}

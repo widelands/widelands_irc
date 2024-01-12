@@ -86,6 +86,13 @@ class trigger:
             self.send_message('Try to reconnect', self.target)
             self.reconnect()
 
+        if content[1] == 'logging':
+            if len(content) == 2:
+                self.send_message('Aktuelles Log Level ist: {}'.format(self.logger.getEffectiveLevel()), self.target)
+            elif len(content) == 3:
+                self.logger.setLevel(self.logLevel[content[2]])
+                self.send_message('Log Level {} wurde gesetzt'.format(self.logger.getEffectiveLevel()), self.target)
+
         if content[1] == 'event':
             if len(content) == 2:
                 if len(self.events) > 0:
@@ -126,8 +133,17 @@ class trigger:
 
     def trigger_privmsg(self):
         content = self.content.split()
-        #if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
-        #    self.send_message("Hello {}. The 2022 Tournament has been announced. Subscriptions appreciated until septemebr 4th. See our homepage for details.".format(content[0]), self.target)
+        if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
+            # 2022
+            #self.send_message("Hello {}. The 2022 Tournament has been announced. Subscriptions appreciated until septemebr 4th. See our homepage for details.".format(content[0]), self.target)
+            # 2023
+            #self.send_message("Hello {}. The yearly Widelands Tournament will take place beginning of August and featuring the new Naval Warfare feature. Subscriptions are open. See our homepage for details.".format(content[0]), self.target)
+            # ToDo: ab ins config file
+            with open(".group_chat_text") as gct:
+                content_gct = gct.readlines()
+                self.send_message(content_gct[0].format(content[0]), self.target)
+            #pass
+
         if self.hostname == self.widelands['admin']['hosts']:
             if re.search('^nickserv', self.content, re.IGNORECASE):
                 self.trigger_nickserv()

@@ -1,12 +1,14 @@
 from colors import colorize
 import subprocess
 import requests
+import re
 
 def fmt_repo(data):
     repo = '[' + data['repository']['full_name'] + ']'
     return colorize(repo, 'royal', 'irc')
 
 # Use git.io to get a shortened link for commit names, etc. which are too long
+# https://git.io no longer available
 def short_gh_link(link):
     conn = requests.post('https://git.io', data={'url':link})
     print('Header: {}'.format(conn.headers))
@@ -22,11 +24,13 @@ def fmt_commit(cmt):
 
     return '{} {}: {}'.format(hsh, author, message)
 
-def fmt_message(message, message_len=350):
-    print('MSG: {}\nType: {}'.format(message, type(message)))
+def fmt_message(message, message_len=370):
     if message:
-        message = message.replace('\n', ' ')
-        message = message.replace('\r', '')
+        message = message.replace('\r\n', ' ')
+        message = message.replace('\n\n', ' ')
+        message = message.replace('\n', '')
+        if message.startswith('<!-- MIRRORED_BY_BUNNYBOT'):
+            message = re.sub(r'<!-- MIRRORED_BY_BUNNYBOT.*?\* --- ', '', message)
         message = message[:message_len] \
             + ('..' if len(message) > message_len else '')
 
@@ -40,7 +44,7 @@ def fmt_last_commits(data):
         return commits
     else:
         ellipsized_num = len(commits) - MAX_COMMIT_LOG_LEN + 1
-        ellipsized = str(ellipsized_num) + ' more'
+        ellipsized = '{} more'.format(ellipsized_num)
         last_shown = MAX_COMMIT_LOG_LEN - 1
 
         last_line = '... and {} commit' \
@@ -66,14 +70,14 @@ def handle_force_push(irc, data):
     for commit in commits:
         irc.schedule_message(commit)
 
-    print("Force push event")
-
 def handle_forward_push(irc, data):
-    author = colorize(data['pusher']['name'], 'bold', 'irc')
+    if 'name' in data['pusher'].keys():
+        author = colorize(data['pusher']['name'], 'bold', 'irc')
+    else:
+        author = colorize(data['pusher']['username'], 'bold', 'irc')
 
     num_commits = len(data['commits'])
     num_commits = "{} commit{}".format(num_commits, 's' if num_commits > 1 else '')
-
     num_commits = colorize(num_commits, 'bold-teal', 'irc')
 
     branch = data['ref'].split('/')[-1]
@@ -83,10 +87,12 @@ def handle_forward_push(irc, data):
             .format(fmt_repo(data), author, num_commits, branch))
 
     commits = fmt_last_commits(data)
-    for commit in commits:
-        irc.schedule_message(commit)
-
-    print("Push event")
+    if commits:
+        for commit in commits:
+            irc.schedule_message(commit)
+    else:
+        message = fmt_message(data['head_commit']['message'])
+        irc.schedule_message('{}'.format(message))
 
 def handle_delete_branch(irc, data):
     author = colorize(data['pusher']['name'], 'bold', 'irc')
@@ -99,10 +105,13 @@ def handle_delete_branch(irc, data):
             .format(fmt_repo(data), author, action, branch))
 
 def handle_push_event(irc, data):
-    if data['forced']:
-        handle_force_push(irc, data)
-    elif data['deleted']:
-        handle_delete_branch(irc, data)
+    if 'forced' and 'deleted' in data.keys():
+        if data['forced']:
+            handle_force_push(irc, data)
+        elif data['deleted']:
+            handle_delete_branch(irc, data)
+        else:
+            handle_forward_push(irc, data)
     else:
         handle_forward_push(irc, data)
 
@@ -123,7 +132,7 @@ def handle_pull_request(irc, data):
     repo = fmt_repo(data)
     author = colorize(data['sender']['login'], 'bold', 'irc')
     action = fmt_pr_action(data['action'], data['pull_request']['merged'])
-    pr_num = colorize('#' + str(data['number']), 'bold-blue', 'irc')
+    pr_num = colorize('#{}'.format(data['number']), 'bold-blue', 'irc')
     title = data['pull_request']['title']
     message = fmt_message(data['pull_request']['body'])
 
@@ -132,19 +141,17 @@ def handle_pull_request(irc, data):
     if message:
         irc.schedule_message('{}'.format(message))
 
-
 def handle_issue(irc, data):
-    print('Issue')
     repo = fmt_repo(data)
     user = colorize(data['sender']['login'], 'bold', 'irc')
 
     action = data['action']
-    print('Action: {}'.format(action))
     if action in ['opened', 'closed']:
         action_color = 'red' if action == 'opened' else 'green'
     elif action == 'milestoned':
         action_color = 'red'
     else:
+        irc.log_to_file('INFO', 'Action: {}'.format(action))
         print('Action: {}'.format(action))
         return
     action = colorize(action, action_color, 'irc')
@@ -155,24 +162,31 @@ def handle_issue(irc, data):
 
     irc.schedule_message('{} {} {} issue {}: {}'
             .format(repo, user, action, issue_num, title))
+    #if action in ['opened', 'closed']:
     irc.schedule_message('{}'.format(message))
-
-    print('Issue')
 
 def handle_issue_comment(irc, data):
     repo = fmt_repo(data)
     title = fmt_message(data['issue']['title'], MAX_COMMIT_LEN)
     author = colorize(data['sender']['login'], 'bold', 'irc')
-    issue_num = colorize('#' + str(data['issue']['number']), 'bold-blue', 'irc')
+    issue_num = colorize('#{}'.format(data['issue']['number']), 'bold-blue', 'irc')
     message = fmt_message(data['comment']['body'])
 
-    irc.schedule_message('{} {} commented on issue {}: {}'
-            .format(repo, author, issue_num, title))
+    if data['action'] == 'created':
+        irc.schedule_message('{} {} commented on issue {}: {}'
+                .format(repo, author, issue_num, title))
+    elif data['action'] == 'edited':
+        action = colorize(data['action'], 'brown', 'irc')
+        irc.schedule_message('{} {} {} a comment on issue {}: {}'
+                .format(repo, author, action, issue_num, title))
+    else:
+        irc.schedule_message('{} {} do {} with issue {}: {}'
+                .format(repo, author, data['action'], issue_num, title))
     irc.schedule_message('{}'.format(message))
 
-    print('Issue comment')
-
 def handle_status_event(irc, data):
+    irc.log_to_file('INFO', 'Status: {}'.format(data['state']))
+    print('Status: {}'.format(data['state']))
     if data['state'] == 'success':
         color = 'bold-green'
     elif data['state'] == 'error':
@@ -180,11 +194,8 @@ def handle_status_event(irc, data):
     elif data['state'] == 'failure':
         color = 'bold-red'
     elif data['state'] == 'pending':
-        print('Status: {}'.format(data['state']))
-        return
         color = 'bold-teal'
     else:
-        print('Status: {}'.format(data['state']))
         color = 'black'
 
     repo = fmt_repo(data)
@@ -207,34 +218,80 @@ def handle_status_event(irc, data):
     irc.schedule_message('{} {}'
             .format(build, target_url))
 
-    print('Status event')
-
 def handle_watch_event(irc, data):
     if data['action'] == 'started':
         message = colorize('has been starred by', 'bold-green', 'irc')
     else:
+        irc.log_to_file('INFO', 'Watch event: {}'.format(data['action']))
         print('Watch event: {}'.format(data['action']))
     repo = fmt_repo(data)
     sender = data['sender']['login']
     irc.schedule_message('{} {} {}'.format(repo, message, sender))
 
-    print('Watch event')
+def handle_check_run(irc, data):
+    if data['action'] != "created":
+        repo = fmt_repo(data)
+        check_suite_id = colorize('{}'.format(data['check_run']['check_suite']['id']), 'bold-white', 'irc')
+        color_check_status = "green" if data['check_run']['conclusion'] == "success" else "red"
+        check_status = colorize(data['check_run']['conclusion'], color_check_status, 'irc')
+        irc.schedule_message('{} Check ID {}: {} {} {}: {}/{}'.format(
+            repo
+            , check_suite_id
+            , data['check_run']['name']
+            , colorize('for', 'bold-white', 'irc')
+            , data['check_run']['check_suite']['head_branch']
+            , colorize(data['check_run']['status'], 'lime', 'irc')
+            , check_status
+            ))
+
+def handle_check_suite(irc, data):
+    repo = fmt_repo(data)
+    suite_id = colorize('{}'.format(data['check_suite']['id']), 'bold-white', 'irc')
+    color_suite_status = "green" if data['check_suite']['conclusion'] == "success" else "red"
+    suite_status = colorize(data['check_suite']['conclusion'], color_suite_status, 'irc')
+    suite_check = "checks" if data['check_suite']['latest_check_runs_count'] > 1 else "check"
+    suite_checks = '{} {}'.format(data['check_suite']['latest_check_runs_count'], suite_check)
+    irc.schedule_message('{} Suite ID {}: {} {} {}/{}'.format(
+        repo
+        , suite_id
+        , data['check_suite']['head_branch']
+        , suite_checks
+        , colorize(data['check_suite']['status'], 'lime', 'irc')
+        , suite_status
+        ))
 
 def handle_ping_event(irc, data):
-    print("Ping event")
+    pass
 
-def handle_check_run(irc, data):
-    print('Action: {}\nName: {}\nStatus: {}\nConclusion: {}'.format(
-        data['action'], data['check_run']['name'], data['check_run']['status'], data['check_run']['conclusion']))
+def handle_release(irc, data):
+    pass
+
+def handle_pull_request_comment(irc, data):
+    pass
+
+def handle_pull_request_review(irc, data):
+    pass
+
+def handle_pull_request_review_comment(irc, data):
+    pass
+
+def handle_create(irc, data):
+    pass
+
+def handle_delete(irc, data):
+    pass
 
 def handle_event(irc, event, data):
     msg = ''
+    irc.log_to_file('INFO', event)
     if event == 'ping':
         handle_ping_event(irc, data)
     elif event == 'push':
         handle_push_event(irc, data)
     elif event == 'pull_request':
         handle_pull_request(irc, data)
+    elif event == 'pull_request_comment':
+        handle_pull_request_comment(irc, data)
     elif event == 'issues':
         handle_issue(irc, data)
     elif event == 'issue_comment':
@@ -245,7 +302,22 @@ def handle_event(irc, event, data):
         handle_watch_event(irc, data)
     elif event == 'check_run':
         handle_check_run(irc, data)
+    elif event == 'release':
+        handle_release(irc, data)
+    elif event == 'check_suite':
+        handle_check_suite(irc, data)
+    elif event == 'pull_request_review':
+        handle_pull_request_review(irc, data)
+    elif event == 'pull_request_review_comment':
+        handle_pull_request_review_comment(irc, data)
+    elif event == 'create':
+        handle_create(irc, data)
+    elif event== 'delete':
+        handle_delete(irc, data)
     else:
         msg = 'Unknown event type: {}'.format(event)
     msg = 'handle_event: {}'.format(event) if not msg else msg
+    irc.log_to_file('INFO', msg)
+    irc.log_to_file('DEBUG', data)
     print(msg)
+
