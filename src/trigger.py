@@ -5,6 +5,23 @@ import os
 
 from distutils.util import strtobool
 
+import ipaddress
+# sudo apt install python3-whois
+import whois
+# sudo apt install python3-cymruwhois
+import cymruwhois
+
+
+def check_if_ip(check):
+    try:
+        ip = ipaddress.ip_address(check)
+        return True
+    except ValueError:
+        return False
+    except:
+        return False
+
+
 class trigger:
     def trigger_notice(self):
         if self.hostname == 'NickServ!NickServ@services.' and self.widelands['nickserv']['replay']:
@@ -147,6 +164,26 @@ class trigger:
                     self.trigger_admin()
                 else:
                     self.send_message("Hier sollte was stehen", self.target)
+
+        if re.search('^whois', self.content, re.IGNORECASE):
+            string = ' '.join(content[1:])
+            if check_if_ip(string):
+                whois_ip = cymruwhois.Client()
+                lookup = whois_ip.lookup(string)
+                self.send_message(f'ASN:     {lookup.asn}', self.target)
+                self.send_message(f'Prefix:  {lookup.prefix}', self.target)
+                self.send_message(f'IP:      {lookup.ip}', self.target)
+                self.send_message(f'Country: {lookup.cc}', self.target)
+                self.send_message(f'Owner:   {lookup.owner}', self.target)
+            else:
+                try:
+                    domain = whois.query(string)
+                    #domain_name = domain.name
+                    self.send_message(f'Name:      {domain.name}', self.target)
+                    self.send_message(f'Registrar: {domain.registrar}', self.target)
+                    self.send_message(f'Expire:    {domain.expiration_date}', self.target)
+                except Exception as e:
+                    self.send_message(f'Error: {e}', self.target)
 
         if self.content.find('{}ping'.format(self.trigger)) == 0 \
                 or re.search('^ping {}'.format(self.widelands['nickserv']['username']), self.content, re.IGNORECASE):
