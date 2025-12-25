@@ -107,7 +107,7 @@ class trigger:
             if len(content) == 2:
                 self.send_message('Aktuelles Log Level ist: {}'.format(self.logger.getEffectiveLevel()), self.target)
             elif len(content) == 3:
-                self.logger.setLevel(self.logLevel[content[2]])
+                self.logger.setLevel(self.logLevel[content[2].upper()])
                 self.send_message('Log Level {} wurde gesetzt'.format(self.logger.getEffectiveLevel()), self.target)
 
         if content[1] == 'event':
@@ -150,6 +150,8 @@ class trigger:
 
     def trigger_privmsg(self):
         content = self.content.split()
+        if not re.search('^s\/', self.content, re.IGNORECASE):
+            self.backlog[self.name] = self.content
         if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
             with open(self.widelands['channel']['welcome']) as gct:
                 content_gct = gct.readlines()
@@ -164,6 +166,26 @@ class trigger:
                     self.trigger_admin()
                 else:
                     self.send_message("Hier sollte was stehen", self.target)
+
+        if re.search('^s\/', self.content, re.IGNORECASE):
+            msg = ''
+            if len(self.content.split("/")) == 4:
+                _, muster, ersatz, count = self.content.split("/")
+                try:
+                    count = int(count) if count != '' else 0
+                except:
+                    msg = f'"{count}" muss irgendwie einer Zahl nahe kommen!'
+            elif len(self.content.split("/")) == 3:
+                _, muster, ersatz = self.content.split("/")
+                count = 0
+            else:
+                msg = 'Da fehlt was! Nur was?'
+
+            if msg:
+                self.send_message(f'ERROR: {msg}', self.target)
+            else:
+                content_neu = re.sub(re.escape(muster), ersatz, self.backlog[self.name], count)
+                self.send_message(f'{self.name} meinte: {content_neu}', self.target)
 
         if re.search('^whois', self.content, re.IGNORECASE):
             string = ' '.join(content[1:])

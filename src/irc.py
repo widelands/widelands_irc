@@ -33,6 +33,7 @@ class IrcConnection(trigger, config):
         self.is_debug = False
         self.quit_loop = False
         self.time_format = "%d.%m.%Y %H:%M:%S"
+        self.backlog = {}
         locale.setlocale(locale.LC_TIME, self.widelands['locale']['lang'])
         # create logger
         self.logger = logging.getLogger('widelands_bot')
