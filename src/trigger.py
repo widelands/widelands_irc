@@ -151,7 +151,18 @@ class trigger:
     def trigger_privmsg(self):
         content = self.content.split()
         if not re.search('^s\/', self.content, re.IGNORECASE):
+            """
+            für später, als überlegung, todo
+            einem namen pro kanal das letzte statement
+            * Methode 1:
+              self.backlog.setdefault(self.name, {})[self.target] = self.content
+            * Methode 2:
+              from collections import defaultdict
+              self.backlog = defaultdict(dict)
+              self.backlog[self.name][self.target] = self.content
+            """
             self.backlog[self.name] = self.content
+
         if self.target == "#widelands" and ' '.join(content[1:]) == "has joined the lobby.":
             with open(self.widelands['channel']['welcome']) as gct:
                 content_gct = gct.readlines()
@@ -168,24 +179,30 @@ class trigger:
                     self.send_message("Hier sollte was stehen", self.target)
 
         if re.search('^s\/', self.content, re.IGNORECASE):
-            msg = ''
-            if len(self.content.split("/")) == 4:
-                _, muster, ersatz, count = self.content.split("/")
-                try:
-                    count = int(count) if count != '' else 0
-                except:
-                    msg = f'"{count}" muss irgendwie einer Zahl nahe kommen!'
-            elif len(self.content.split("/")) == 3:
-                _, muster, ersatz = self.content.split("/")
-                count = 0
-            else:
-                msg = 'Da fehlt was! Nur was?'
+            content_neu = self.backlog[self.name]
+            for step in self.content.split(";"):
+                msg = ''
+                if len(step.split("/")) == 4:
+                    _, muster, ersatz, count = step.split("/")
+                    try:
+                        count = int(count) if count != '' else 0
+                    except:
+                        msg = f'"{count}" muss irgendwie einer Zahl nahe kommen!'
+                elif len(step.split("/")) == 3:
+                    _, muster, ersatz = step.split("/")
+                    count = 0
+                else:
+                    msg = 'Da fehlt was! Nur was?'
 
-            if msg:
-                self.send_message(f'ERROR: {msg}', self.target)
-            else:
-                content_neu = re.sub(re.escape(muster), ersatz, self.backlog[self.name], count)
+                if msg:
+                    self.send_message(f'Error: {msg}', self.target)
+                else:
+                    content_neu = re.sub(re.escape(muster), ersatz, content_neu, count)
+
+            if content_neu != self.backlog[self.name]:
                 self.send_message(f'{self.name} meinte: {content_neu}', self.target)
+            else:
+                self.send_message('Info: Es hat sich nichts geändert.', self.target)
 
         if re.search('^whois', self.content, re.IGNORECASE):
             string = ' '.join(content[1:])
