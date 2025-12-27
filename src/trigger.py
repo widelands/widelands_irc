@@ -152,8 +152,8 @@ class trigger:
         content = self.content.split()
         if not re.search('^s\/', self.content, re.IGNORECASE):
             """
-            für später, als überlegung, todo
-            einem namen pro kanal das letzte statement
+            für später, als überlegung, todo:
+            einem namen pro kanal das letzte statement zuordnen
             * Methode 1:
               self.backlog.setdefault(self.name, {})[self.target] = self.content
             * Methode 2:
