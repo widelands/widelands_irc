@@ -10,6 +10,8 @@ import ipaddress
 import whois
 # sudo apt install python3-cymruwhois
 import cymruwhois
+# pip install pydig
+import pydig
 
 
 def check_if_ip(check):
@@ -223,6 +225,22 @@ class trigger:
                     self.send_message(f'Expire:    {domain.expiration_date}', self.target)
                 except Exception as e:
                     self.send_message(f'Error: {e}', self.target)
+
+        if re.search('^dig', self.content, re.IGNORECASE):
+            records = ['A', 'NS', 'CNAME', 'SOA', 'PTR', 'MX', 'TXT', 'AAAA', 'DS', 'DNSKEY', 'CDS', 'CDNSKEY', 'CAA']
+            if len(content) == 3:
+                record = content[1].upper()
+                domain = content[2]
+                if record in records:
+                    result = pydig.query(domain, record)
+                    if result:
+                        self.send_message(f'Der {record}-Record ist: "{", ".join(result)}"', self.target)
+                    else:
+                        self.send_message(f'Domain: {domain} hat keinen Wert für {record}-Record.', self.target)
+                else:
+                    self.send_message(f'{record} ist nicht in {records}', self.target)
+            else:
+                self.send_message('USAGE: dig <record> <domain>', self.target)
 
         if self.content.find('{}ping'.format(self.trigger)) == 0 \
                 or re.search('^ping {}'.format(self.widelands['nickserv']['username']), self.content, re.IGNORECASE):
