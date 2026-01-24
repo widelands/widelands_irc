@@ -208,23 +208,25 @@ class trigger:
 
         if re.search('^whois', self.content, re.IGNORECASE):
             string = ' '.join(content[1:])
-            if check_if_ip(string):
-                whois_ip = cymruwhois.Client()
-                lookup = whois_ip.lookup(string)
-                self.send_message(f'ASN:     {lookup.asn}', self.target)
-                self.send_message(f'Prefix:  {lookup.prefix}', self.target)
-                self.send_message(f'IP:      {lookup.ip}', self.target)
-                self.send_message(f'Country: {lookup.cc}', self.target)
-                self.send_message(f'Owner:   {lookup.owner}', self.target)
+            if len(content) == 2:
+                if check_if_ip(string):
+                    whois_ip = cymruwhois.Client()
+                    lookup = whois_ip.lookup(string)
+                    self.send_message(f'ASN:     {lookup.asn}', self.target)
+                    self.send_message(f'Prefix:  {lookup.prefix}', self.target)
+                    self.send_message(f'IP:      {lookup.ip}', self.target)
+                    self.send_message(f'Country: {lookup.cc}', self.target)
+                    self.send_message(f'Owner:   {lookup.owner}', self.target)
+                else:
+                    try:
+                        domain = whois.query(string)
+                        self.send_message(f'Name:      {domain.name}', self.target)
+                        self.send_message(f'Registrar: {domain.registrar}', self.target)
+                        self.send_message(f'Expire:    {domain.expiration_date}', self.target)
+                    except Exception as e:
+                        self.send_message(f'Error: {e}', self.target)
             else:
-                try:
-                    domain = whois.query(string)
-                    #domain_name = domain.name
-                    self.send_message(f'Name:      {domain.name}', self.target)
-                    self.send_message(f'Registrar: {domain.registrar}', self.target)
-                    self.send_message(f'Expire:    {domain.expiration_date}', self.target)
-                except Exception as e:
-                    self.send_message(f'Error: {e}', self.target)
+                self.send_message('USAGE: whois <domain> or <ip>', self.target)
 
         if re.search('^dig', self.content, re.IGNORECASE):
             records = ['A', 'NS', 'CNAME', 'SOA', 'PTR', 'MX', 'TXT', 'AAAA', 'DS', 'DNSKEY', 'CDS', 'CDNSKEY', 'CAA']
